@@ -107,6 +107,8 @@ int tones[] = {262, 294, 330, 350, 392}; // make the initial tone array
 PianoPlayer Player = PianoPlayer(5, tones, 13);
 const int Outputs[] = {3, 5, 7, 9, 11}; // output pins
 const int Inputs[] = {4, 6, 8, 10, 12}; // input pins
+unsigned long TimeDelay[] = {0, 0, 0, 0, 0}; // this is used to determine rebounce
+int CurrentStates[] = {HIGH, HIGH, HIGH, HIGH, HIGH}; // current states of button
 
 void setup() {
   for (int i = 0; i < 5; i++) {
@@ -120,7 +122,7 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
-  holdingKey(10000);
+  pressingKey();
   
 }
 
@@ -128,7 +130,8 @@ void loop() {
 // and plays noted key
 void pressingKey() {
   for (int i = 0; i < 5; i++) {
-    if (digitalRead(Inputs[i]) == LOW) {
+    debouncedCheck(i);
+    if (CurrentStates[i] == LOW) {
       Player.play(i);
       break;
     }
@@ -138,9 +141,22 @@ void pressingKey() {
 // similar to pressingKey, just for extended period of time
 void holdingKey(int duration) {
   for (int i = 0; i < 5; i++) {
-    if (digitalRead(Inputs[i]) == LOW) {
+    debouncedCheck(i);
+    if (CurrentStates[i] == LOW) {
       Player.playDuration(i, duration);
       break;
     }
   }
 }
+// for debouncing
+// checks to see if button is pressed again
+// only changes state if alloted amount of time passes
+void debouncedCheck(int button) {
+  unsigned long timeDifference = millis() - TimeDelay[button];
+  int readValue = digitalRead(Inputs[button]);
+  if (timeDifference > 50 && readValue != CurrentStates[button]) {
+    CurrentStates[button] = readValue;
+    TimeDelay[button] = millis();
+  }
+}
+  
