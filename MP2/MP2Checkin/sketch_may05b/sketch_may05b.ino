@@ -23,9 +23,9 @@ void setup() { // simple program to manipulate text
 void loop() {
   // put your main code here, to run repeatedly:
   Serial.println("enter a value for x and then for y");
-  Serial.setTimeout(10000);
-  uint16_t x = Serial.parseInt();
-  uint16_t y = Serial.parseInt();
+  delay(1000);
+  uint16_t x = 30;
+  uint16_t y = 30;
   String message = "Testing for Pat";
   display.clearDisplay();
   display.setTextSize(1);

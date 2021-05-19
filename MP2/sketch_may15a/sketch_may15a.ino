@@ -24,15 +24,14 @@ class SnakePlayer {
   unsigned long startTime; // when the game started
   unsigned long winTime; // when the snake player wins the game if he survives too
   int radius; // radius of each node in the snake
-  uint8_t vibrationChannel; // will the vibrations will come from
-
+  int vibrationChannel; // will the vibrations will come from
   // updates both the lights for the snake
   // winningLight increases in brightness as time goes by
   // losingLight increases in brightness the more size has decreased
   void updateLights() {
-    int winningBrightness = map(millis(), startTime, winTime, 0, HIGH);
+    int winningBrightness = map(millis(), startTime, winTime, 0, 4000);
     ledcWrite(winningLight, winningBrightness);
-    int losingBrightness = HIGH - map(snakeLength, 0, startLength, 0, HIGH);
+    int losingBrightness = 4000 - map(snakeLength, 0, startLength, 0, 4000);
     ledcWrite(losingLight, losingBrightness);
   }
 
@@ -40,47 +39,50 @@ class SnakePlayer {
   // each ball is one move behind the one in front (will take place of)
   // if hitts a wall will lose a head and bounce in opposite direction
   void updateBody() {
-    for (int i = snakeLength - 1; i > 0; i--) {
-      xLocations[i + 1] = xLocations[i];
-      yLocations[i + 1] = yLocations[i];
+    int changeInX = 0;
+    int changeInY = 0;
+    if (analogRead(xPositionFinder) > 2000) {
+      changeInX = radius;
+    } else if (analogRead(xPositionFinder) < 1200) {
+      changeInX = -1 * radius;
     }
-    int changeInX = map(analogRead(xPositionFinder), 0, 4096, -1 * radius,radius);
-    int changeInY = map(analogRead(yPositionFinder), 0, 4096,-1 * radius, radius);
-    xLocations[0] += changeInX;
-    yLocations[0] += changeInY;
-    // trying to fully backtrack
-    if (snakeLength > 1 && xLocations[0] == xLocations[0] && yLocations[0] == yLocations[0]) {
-      xLocations[0] -= (2 * changeInX); // inertia for x
-      yLocations[0] -= (2 * changeInY); // inertia for y
-      // if snake is going in the opposite direction, going to switch tail to back of snake 
-      for (int i = 0; i < (snakeLength / 2); i++) {
-        int tempX = xLocations[i];
-        int tempY = yLocations[i];
-        xLocations[i] = xLocations[snakeLength - i];
-        yLocations[i] = yLocations[snakeLength - i]; 
+    if (analogRead(yPositionFinder) > 2000) {
+      changeInY = radius;
+    } else  if (analogRead(yPositionFinder) < 1200) {
+      changeInY = -1 * radius;
+    }
+    xLocations[0] += 2 * changeInX;
+    yLocations[0] += 2 * changeInY;
+    boolean dontUpdate = false;
+    if (snakeLength > 1) {
+      if (xLocations[0] == xLocations[1] && yLocations[0] == yLocations[1]
+      || (changeInX == 0 && changeInY == 0)) {
+        xLocations[0] -= 2 * changeInX;
+        yLocations[0] -= 2 * changeInY;
+        dontUpdate = true;
+      }
+    }
+    if (!dontUpdate) {
+      for (int i = snakeLength - 1; i >= 0; i--) {
+        xLocations[i + 1] = xLocations[i];
+        yLocations[i + 1] = yLocations[i];
       }
     }
     // this long if statement just checks if we hit any of the walls
-    // if so, just makes the back the front again, but removes a node (ie gits rid of front)
-    if (xLocations[0] >= SCREEN_WIDTH || xLocations[0] <= 0 ||
-    yLocations[0] >= SCREEN_HEIGHT || yLocations[0] <= 0) {
-      for (int i = 0; i < (snakeLength / 2); i++) {
-        int tempX = xLocations[i];
-        int tempY = yLocations[i];
-        xLocations[i] = xLocations[snakeLength - i];
-        yLocations[i] = yLocations[snakeLength - i]; 
-      }
-      snakeLength--;
-      ledcWrite(vibrationChannel, HIGH);
+    // if so size goes to zero and snake player loses
+    if (xLocations[0] >= (SCREEN_WIDTH - radius) || xLocations[0] <= radius ||
+    yLocations[0] >= (SCREEN_HEIGHT - radius) || yLocations[0] <= radius) {
+      snakeLength = 0;
+      digitalWrite(vibrationChannel, HIGH);
     }
     // checks if the front node hits any of the intermediate nodes
     // if so gets rid of that node and any below it
     for (int i = 1; i < snakeLength; i++) {
-      if (abs(xLocations[0] - xLocations[i]) <= radius && abs(yLocations[0] - yLocations[i]) <= radius) {
-        snakeLength = i;
-        ledcWrite(vibrationChannel, HIGH);
-        break;
-      }
+      //if (abs(xLocations[0] - xLocations[i]) <= radius && abs(yLocations[0] - yLocations[i]) <= radius) {
+        //snakeLength = i;
+        //ledcWrite(vibrationChannel, HIGH);
+       // break;
+      //}
     }
     // writes to the display the locations of all the nodes
     for (int i = 0; i < snakeLength; i++) {
@@ -91,10 +93,10 @@ class SnakePlayer {
   public:
 
   // Constructor
-  SnakePlayer(uint8_t WinningLight, uint8_t LosingLight, int StartLength, uint8_t VibrationChannel,
+  SnakePlayer(uint8_t WinningLight, uint8_t LosingLight, int StartLength, int VibrationChannel,
   int XPositionFinder, int YPositionFinder, unsigned long WinTime, int Radius) {
     winningLight = WinningLight;
-    losingLight = 0; // figure out the light stuff
+    losingLight = LosingLight;
     xLocations = new uint16_t[StartLength];
     yLocations = new uint16_t[StartLength];
     startLength = StartLength;
@@ -103,12 +105,14 @@ class SnakePlayer {
     vibrationChannel = VibrationChannel;
     winTime = millis() + WinTime;
     startTime = millis();
+    xPositionFinder = XPositionFinder;
+    yPositionFinder = YPositionFinder;
   }
 
   // public update call to adust snake
   // the light and the location
   void updateSnake() {
-    ledcWrite(vibrationChannel, LOW);
+    digitalWrite(vibrationChannel, LOW);
     updateLights();
     updateBody();
   }
@@ -119,11 +123,11 @@ class SnakePlayer {
   }
 
   // checks if given points hits the snake, and if so removes node
-  void checksBody(int xSpot, int ySpot) {
+  void checksBody(uint8_t xSpot, uint8_t ySpot) {
     for (int i = 0; i < snakeLength; i++) {
       if (abs(xLocations[i] - xSpot) <= radius && abs(yLocations[i] - ySpot) <= radius) {
         snakeLength--;
-        ledcWrite(vibrationChannel, HIGH);
+        digitalWrite(vibrationChannel, HIGH);
       }
     }
   }
@@ -131,7 +135,7 @@ class SnakePlayer {
   // returns 1 if snakePlayer has won
   // returns -1 if sniperPlayer has won
   // returns 0 if neither player has won yet
-  bool gameOver() {
+  int gameOver() {
     if (snakeLength <= 0) {
       return -1;
     } else if (millis() >= winTime) {
@@ -148,7 +152,14 @@ class SnakePlayer {
       xLocations[i] = initialX - (2 * radius * i);
       yLocations[i] = initialY;
       Display.drawCircle(xLocations[i], yLocations[i], radius, SSD1306_WHITE);
-    } 
+    }
+    Display.display();
+  }
+
+  // resets size and time
+  void resetSize() {
+    snakeLength = startLength;
+    winTime = (winTime - startTime) + millis();
   }
 };
 
@@ -174,54 +185,47 @@ class SniperPlayer {
   unsigned long startTime; // when the game started
   unsigned long loseTime; // when the snake player loses the game if he survives too
   Tone32 Toner; // where the sound source will come from
-  SnakePlayer currentSnake; // current snake in game
+  int playerTwoButton;
 
   // updates both the lights for the snake
   // winningLight increases in brightness as snakeLength decreases
   // losingLight increases in brightness as time goes by
-  void updateLights() {
-    int winningBrightness = map(currentSnake.snakeSize(), 0, startLength, 0, HIGH);
+  void updateLights(SnakePlayer currentSnake) {
+    int winningBrightness = map(currentSnake.snakeSize(), 0, startLength, 0, 4000);
     ledcWrite(winningLight, winningBrightness);
-    int losingBrightness = map(millis(), startTime, loseTime, 0, HIGH);
+    int losingBrightness = map(millis(), startTime, loseTime, 0, 4000);
     ledcWrite(losingLight, losingBrightness);
   }
 
   // updates the current position of the gun
-  void updatePostion() {
+  void updatePosition() {
     int gunPositionIndex = map(analogRead(gunChannel), 0, 4096, 0, 2 * gunLength);
     Display.drawLine(xBase, yBase, xHeadLocations[gunPositionIndex], yHeadLocations[gunPositionIndex], SSD1306_WHITE);
   }
 
   // updates the bullet location if fired, or checks if we fire a bullet
-  void updateBullet() {
-    int gunPositionIndex = map(analogRead(gunChannel), 0, 4096, 0, 2 * gunLength);
-    currentSnake.checksBody(xBase, yBase);
-    currentSnake.checksBody(xHeadLocations[gunPositionIndex], yHeadLocations[gunPositionIndex]);
-    int xInBetween = (xHeadLocations[gunPositionIndex] - xBase) + xBase;
-    int yInBetween = (yHeadLocations[gunPositionIndex] - yBase) + yBase;
-    currentSnake.checksBody(xInBetween, yInBetween);
+  void updateBullet(SnakePlayer currentSnake) {
+    int gunPositionIndex = (map(analogRead(gunChannel), 0, 4096, 0, 2 * gunLength));
     if (shotBullet) {
       bulletXLocation += bulletXVelocity;
       bulletYLocation += bulletYVelocity;
       uint16_t xSpot = (bulletXLocation / gunLength) + xBase;
       uint16_t ySpot = (bulletYLocation / gunLength) + yBase;
       // checks if the bullet is in a viable location
-      if (bulletXLocation <= 0 || bulletXLocation >= SCREEN_WIDTH
-      || bulletYLocation <= 0 || bulletYLocation >= SCREEN_HEIGHT) {
+      if (xSpot < 0 || xSpot > SCREEN_WIDTH
+      || ySpot < 0 || ySpot > SCREEN_HEIGHT) {
         shotBullet = false; // bullet is off screen, you can shoot now
       } else {
-        Display.drawLine(xSpot, ySpot, xSpot, ySpot, SSD1306_WHITE);
-        currentSnake.checksBody(xSpot, ySpot);
+        Display.drawPixel(xSpot, ySpot, SSD1306_WHITE);
       }
-    } else {
-      if (digitalRead(gunChannel) == LOW) {
-        shotBullet = true;
-        bulletXVelocity = xHeadLocations[gunPositionIndex];
-        bulletYVelocity = yHeadLocations[gunPositionIndex];
-        bulletXLocation = 0;
-        bulletYLocation = 0;
-        Toner.playNote(NOTE_A, 4); 
-      }
+    } 
+    if (digitalRead(playerTwoButton) == LOW) {
+      shotBullet = true;
+      bulletXVelocity = (xHeadLocations[gunPositionIndex] - xBase);
+      bulletYVelocity = yHeadLocations[gunPositionIndex];
+      bulletXLocation = 0;
+      bulletYLocation = 0;
+      Toner.playNote(NOTE_A, 4); 
     }
   }
 
@@ -229,8 +233,8 @@ class SniperPlayer {
 
   // Constructor
   SniperPlayer(uint8_t WinningLight, uint8_t LosingLight, int GunLength, int GunChannel,
-  unsigned long LoseTime, SnakePlayer snake, int soundPin, uint8_t soundChannel)
-  : currentSnake(snake), Toner(soundPin, soundChannel) {
+  unsigned long LoseTime, SnakePlayer snake, int soundPin, uint8_t soundChannel, int PlayerTwoButton)
+  : Toner(soundPin, soundChannel) {
     winningLight = WinningLight;
     losingLight = LosingLight;
     gunLength = GunLength;
@@ -239,6 +243,12 @@ class SniperPlayer {
     yBase = 0;
     xHeadLocations = new uint16_t[2 * gunLength + 1];
     yHeadLocations = new uint16_t[2 * gunLength + 1];
+    for (uint16_t i = 0; i < gunLength; i++) {
+      xHeadLocations[i] = gunLength - i + xBase;
+      xHeadLocations[2 * gunLength - i] = xBase - (gunLength - i);
+      yHeadLocations[i] = i + yBase;
+      yHeadLocations[2 * gunLength - i] = i + yBase;
+    }
     bulletXLocation = xBase;
     bulletYLocation = yBase;
     bulletXVelocity = 0;
@@ -247,36 +257,47 @@ class SniperPlayer {
     startLength = snake.snakeSize();
     startTime = millis();
     loseTime = startTime + LoseTime;
+    playerTwoButton = PlayerTwoButton;
   }
 
   // updates the sniper
-  void updateSniper() {
+  void updateSniper(SnakePlayer currentSnake) {
     Toner.update();
-    int oldSize = currentSnake.snakeSize();
-    updateLights();
-    updateBullet();
-    if (currentSnake.snakeSize() < oldSize) {
-      Toner.playNote(NOTE_C, 4);
-    }
+    updateLights(currentSnake);
+    updatePosition();
+    updateBullet(currentSnake);
   }
+
+  // resets sniper
+  void resetSniper(SnakePlayer currentSnake) {
+    startLength = currentSnake.snakeSize();
+    loseTime = (loseTime - startTime) + millis();
+    startTime = millis();
+  }
+
+  // gives returns an array of the xLocation, yLocation of the bullet
+  uint16_t bulletX() {
+   return (bulletXLocation / gunLength) + xBase;
+  }
+
+  // y location
+  uint16_t bulletY() {
+    return (bulletYLocation / gunLength);
+  }
+    
 };
 
-uint8_t potentiometerOutput;
+
 int potentiometerInput;
-uint8_t vibratingChannel;
+int vibratingChannel;
 uint8_t playerOneRedLight;
 uint8_t playerOneGreenLight;
 uint8_t playerTwoRedLight;
 uint8_t playerTwoGreenLight;
-uint8_t playerTwoButtonOutput;
 int playerTwoButtonInput;
-uint8_t playerOneButtonOutput;
 int playerOneButtonInput;
-uint8_t joyStickLROutput;
 int joyStickLRInput;
-uint8_t joyStickUDOutput;
 int joyStickUDInput;
-
 int noisePin;
 uint8_t noiseMaker;
 
@@ -291,127 +312,174 @@ int playerTwoTotal;
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(9600);
+  delay(3000);
+  Serial.println("test");
+  delay(4000);
   if (!Display.begin(SSD1306_SWITCHCAPVCC, 0x3D)) { // Address 0x3D for 128x64
     Serial.println(F("SSD1306 allocation failed"));
     for (;;); // Don't proceed, loop forever
   }
   Display.clearDisplay();
-  potentiometerOutput = 9;
-  ledcSetup(potentiometerOutput, 490, 8);
-  pinMode(14, OUTPUT);
-  ledcAttachPin(14, potentiometerOutput);
-  potentiometerInput = 32;
-  pinMode(32, INPUT);
+  
+  //potentiometerOutput = 18
+   pinMode(18, OUTPUT);
+   digitalWrite(18, HIGH);
+   
+   potentiometerInput = 34;
+   pinMode(34, INPUT);
+  
   noiseMaker = 10;
   ledcSetup(noiseMaker, 490, 8);
-  noisePin = 16; // check if 16 or 19
+  noisePin = 19; // check if 16 or 19
   pinMode(noisePin, OUTPUT);
   ledcAttachPin(noisePin, noiseMaker); // is this supposed to be 16 or 19
-  vibratingChannel = 0;
-  ledcSetup(vibratingChannel, 490, 8);
-  pinMode(27, OUTPUT);
-  ledcAttachPin(27, vibratingChannel);
+  Tone32 tonez(noisePin, noiseMaker);
+  unsigned long t = 100000;
+  //tonez.playNote(NOTE_C, 4, t); it works
+ 
+  //vibratingChanel = 17;
+  pinMode(17, OUTPUT);
+  digitalWrite(17, HIGH);
+
+  vibratingChannel = 16;
+  pinMode(vibratingChannel, OUTPUT);
+  //digitalWrite(16, HIGH);
+  
+  
   playerOneRedLight = 1;
   ledcSetup(playerOneRedLight, 490, 8);
-  pinMode(12, OUTPUT);
-  ledcAttachPin(12, playerOneRedLight);
+  pinMode(13, OUTPUT);
+  ledcAttachPin(13, playerOneRedLight);
+  //ledcWrite(1, 4000);
+  
   playerOneGreenLight = 2;
   ledcSetup(playerOneGreenLight, 490, 8);
-  pinMode(13, OUTPUT);
-  ledcAttachPin(13, playerOneGreenLight);
+  pinMode(26, OUTPUT);
+  ledcAttachPin(26, playerOneGreenLight);
+  //ledcWrite(2, 4000);
+  
   playerTwoRedLight = 3;
   ledcSetup(playerTwoRedLight, 490, 8);
-  pinMode(21, OUTPUT);
-  ledcAttachPin(21, playerTwoRedLight);
+  pinMode(25, OUTPUT);
+  ledcAttachPin(25, playerTwoRedLight);
+  //ledcWrite(3, 4000);
+  
   playerTwoGreenLight = 4;
   ledcSetup(playerTwoGreenLight, 490, 8);
-  pinMode(17, OUTPUT);
-  ledcAttachPin(17, playerTwoGreenLight);
-  playerTwoButtonOutput = 5;
-  ledcSetup(playerTwoButtonOutput, 490, 8);
-  pinMode(19, OUTPUT);
-  ledcAttachPin(19, playerTwoButtonOutput);
-  playerTwoButtonInput = 18;
-  pinMode(playerTwoButtonInput, INPUT_PULLUP);
-  playerOneButtonOutput = 6;
-  ledcSetup(playerOneButtonOutput, 490, 8);
-  pinMode(4, OUTPUT);
-  ledcAttachPin(4, playerOneButtonOutput);
-  playerOneButtonInput = 36;
+  pinMode(5, OUTPUT);
+  ledcAttachPin(5, playerTwoGreenLight);
+  //ledcWrite(4, 4000);
+  
+  //playerTwoButtonOutput = 5;
+  //ledcSetup(playerTwoButtonOutput, 490, 8);
+  pinMode(15, OUTPUT);
+  //ledcAttachPin(19, playerTwoButtonOutput);
+  //ledcWrite(playerTwoButtonOutput, HIGH);
+  digitalWrite(15, OUTPUT);
+  
+  playerTwoButtonInput = 33;
+  pinMode(33, INPUT_PULLUP);
+  
+  pinMode(14, OUTPUT);
+  digitalWrite(14, HIGH);
+
+  playerOneButtonInput = 32;
   pinMode(playerOneButtonInput, INPUT_PULLUP);
-  joyStickLROutput = 7;
-  ledcSetup(joyStickLROutput, 490, 8);
-  pinMode(39, OUTPUT);
-  ledcAttachPin(39, joyStickLROutput);
-  joyStickLRInput = 34;
+  
+  //joyStickLROutput = 27;
+  pinMode(27, OUTPUT);
+  digitalWrite(27, HIGH);
+  
+  joyStickLRInput = 12;
   pinMode(joyStickLRInput, INPUT);
-  joyStickUDOutput = 8;
-  ledcSetup(joyStickUDOutput, 490, 8);
-  pinMode(25, OUTPUT);
-  ledcAttachPin(25, joyStickUDOutput);
-  joyStickUDInput = 26;
+
+  //joyStickUDOutput
+  pinMode(4, OUTPUT);
+  digitalWrite(4, HIGH);
+
+  joyStickUDInput = 36;
   pinMode(joyStickUDInput, INPUT);
+  
   startMenu();
 }
 
 void loop() {
-  Display.clearDisplay();
-  if (millis() - currentTime >= 20) {
+  if (millis() - currentTime >= 80) {
+    Display.clearDisplay();
     (*snake).updateSnake();
-    (*sniper).updateSniper();
-    if ((*snake).gameOver() == 1) {
-      winScreen(1);
-    } else if ((*snake).gameOver() == -1) {
-      winScreen(-1);
+    (*sniper).updateSniper(*snake);
+    uint8_t bulletLX = (*sniper).bulletX();
+    uint8_t bulletLY = (*sniper).bulletY();
+    (*snake).checksBody(bulletLX, bulletLY);
+    if ((*snake).gameOver() != 0) {
+      winScreen((*snake).gameOver());
     }
     currentTime = millis();
+    Display.display();
   }
-  Display.display();
 }
 
 // start menue for the main game
 // asks some basic settings for the game
 void startMenu() {
    Display.clearDisplay();
-   Display.setCursor(30, 30);
-   Display.println("if you want snake length of 3 player 1 press button");
-   Display.println("if you want the length to be 5 player 2 press button");
+   Display.setTextSize(1);
+   Display.setTextColor(WHITE);
+   Display.setCursor(0, 30);
+   Display.println("length of 3 p1 press");
+   Display.println("length of 4 p2 press");
+   Display.display();
    int snakeSize = 0;
    while (true) {
     if (digitalRead(playerOneButtonInput) == LOW) {
       snakeSize = 3;
       break;
     } else if (digitalRead(playerTwoButtonInput) == LOW) {
-      snakeSize = 5;
+      snakeSize = 4;
       break;
     }
    }
+   delay(1000);
    Display.clearDisplay();
-   Display.println("if you want the game to be a minute long have player one press");
-   Display.println("if you want the game to be two minutes, have player two press");
+   Display.setTextSize(1);
+   Display.setTextColor(WHITE);
+   Display.setCursor(0, 30);
+   Display.println("30 secs p1 press");
+   Display.println("one min p2 press");
+   Display.display();
    unsigned long gameTime  = 0;
    while (true) {
     if (digitalRead(playerOneButtonInput) == LOW) {
-      gameTime = 60000;
+      gameTime = 30000;
+      break;
     } else if (digitalRead(playerTwoButtonInput) == LOW) {
-      gameTime = 120000;
+      gameTime = 60000;
+      break;
     }
    }
+   delay(1000);
    Display.clearDisplay();
-   Display.println("if you want the radius to be 1 unit player one press");
-   Display.println("if you want the radius to be 2 units player two press");
+   Display.setTextSize(1);
+   Display.setTextColor(WHITE);
+   Display.setCursor(0, 30);
+   Display.println("radius 3 p1 press");
+   Display.println("radius 4 p2 press");
+   Display.display();
    int radius = 0;
    while (true) {
     if (digitalRead(playerOneButtonInput) == LOW) {
-      radius = 1;
+      radius = 3;
+      break;
     } else if (digitalRead(playerTwoButtonInput) == LOW) {
-      radius = 2;
+      radius = 4;
+      break;
     }
    }
+   delay(1000);
    snake = new SnakePlayer(playerOneGreenLight, playerOneRedLight, snakeSize, vibratingChannel,
    joyStickLRInput, joyStickUDInput, gameTime, radius);
-   sniper = new SniperPlayer(playerTwoGreenLight, playerTwoRedLight, snakeSize, playerTwoButtonInput,
-   gameTime, *snake, noisePin, noiseMaker);
+   sniper = new SniperPlayer(playerTwoGreenLight, playerTwoRedLight, 5, potentiometerInput,
+   gameTime, *snake, noisePin, noiseMaker, playerTwoButtonInput);
    delayStart();
 }
 
@@ -419,23 +487,39 @@ void startMenu() {
 // asks users if they want to play again or change settings
 void winScreen(int game) {
   Display.clearDisplay();
-  Display.setCursor(30, 30);
+  Display.setTextSize(1);
+  Display.setTextColor(WHITE);
+  Display.setCursor(0, 0);
   if (game == 1) {
     playerOneTotal++;
-    Display.println("Player one has won the game");
+    Display.println("p1 won");
+    ledcWrite(playerOneGreenLight, 4000);
+    ledcWrite(playerOneRedLight, 0);
+    ledcWrite(playerTwoGreenLight, 0);
+    ledcWrite(playerTwoRedLight, 4000);
   } else {
     playerTwoTotal++;
-    Display.println("Player two has won the game");
+    Display.println("p2 won");
+    ledcWrite(playerOneGreenLight, 0);
+    ledcWrite(playerOneRedLight, 4000);
+    ledcWrite(playerTwoGreenLight, 4000);
+    ledcWrite(playerTwoRedLight, 0);
   }
-  Display.println("player one current score " + playerOneTotal);
-  Display.println("player two current score " + playerTwoTotal);
-  Display.println("Play Again, player one press");
-  Display.println("change settings, player two press");
+  Display.println("p1 score:");
+  Display.println(playerOneTotal);
+  Display.println("p2 score:");
+  Display.println(playerTwoTotal);
+  Display.println("same mode p1 press");
+  Display.println("change mode p2 press");
+  Display.display();
   while (true) {
     if (digitalRead(playerOneButtonInput) == LOW) {
+      delay(1000);
+      (*snake).resetSize();
       delayStart();
       break;
     } else if (digitalRead(playerTwoButtonInput) == LOW) {
+      delay(1000);
       startMenu();
       break;
     }
@@ -444,15 +528,15 @@ void winScreen(int game) {
 
 // starts game in three seconds
 void delayStart() {
-  Display.clearDisplay();
-  Display.setCursor(30, 30);
-  Display.println(3);
-  delay(1000);
-  Display.clearDisplay();
-  Display.println(2);
-  delay(1000);
-  Display.print(1);
-  delay(1000);
-  Display.clearDisplay();
-  (*snake).setInitial(30, 30);
+  for (int i = 3; i > 0; i--) {
+    Display.clearDisplay();
+    (*snake).setInitial(30, 30);
+    Display.setTextSize(1);
+    Display.setTextColor(WHITE);
+    Display.setCursor(60, 30);
+    Display.println(i);
+    Display.display();
+    delay(1000);
+  }
+  currentTime = millis();
 }
