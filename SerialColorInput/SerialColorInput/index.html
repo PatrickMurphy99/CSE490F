@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title> This is front end for my L1 code </title>
+    </head>
+
+    <body>
+        <script src="https://cdn.jsdelivr.net/gh/makeabilitylab/p5js/_libraries/serial.js"></script>
+        <h1>L2 front end web serial</h1>
+        <div> I will use this front end interface to work with my arduino code form L1</div>
+
+        <p></p>
+        <button id="connect-to-server-button" onclick="onConnectedButtonClick()">Connect via Serial Port</button>
+        <br>
+        <div id="color buttons" style="display:none">
+            <button id="red light" onclick="turnOnLight(3)">Turning On Red Light</button>
+            <br>
+            <button id="yellow light" onclick="turnOnLight(5)">Turning On Yellow Light</button>
+            <br>
+            <button id="blue light" onclick="turnOnLight(6)">Turning On Blue Light</button>
+            <br>
+            <button id="green light" onclick="turnOnLight(9)">Turning On Green Light</button>
+        </div>
+
+        <div id="brightness slider" style="display:none">
+            <h1>Slider value: <span id="slider-value">0</span></h1>
+            <input id="slider" type="range" min="0" miax="255"
+            value="128" />
+        </div>
+
+        <div id="time slider" style="display:none">
+            <h1>Slider value: <span id="time-value">0</span></h1>
+            <input id="slider" type="range" min="0" miax="10000"
+            value="128" />
+        </div>
+
+        <script>
+            const serial = new Serial();
+            serial.on(SerialEvents.CONNECTION_OPENED, onSerialConnectionOpened);
+            serial.on(SerialEvents.CONNECTION_CLOSED, onSerialConnectionClosed);
+            serial.on(SerialEvents.DATA_RECEIVED, onSerialDataReceived);
+            serial.on(SerialEvents.ERROR_OCCURRED, onSerialErrorOccurred);
+
+            function onSerialErrorOccurred(eventSender, error) {
+                console.log("onSerialErrorOccurred", error);
+            }
+
+            function onSerialConnectionOpened(eventSender) {
+                console.log("onSerialConnectionOpened", eventSender);
+            }
+
+            function onSerialConnectionClosed(eventSender) {
+                console.log("onSerialConnectionClosed", eventSender);
+            }
+
+            function onSerialDataReceived(eventSender, newData) {
+                console.log("onSerialDataReceived", newData);
+            }
+
+            async function onConnectedButtonClick() {
+                console.log("Connected to the server!");
+                document.getElementById("connect-to-server-button").style.display = "none";
+                document.getElementById("color buttons").style.display = "block";
+                document.getElementById("brightness slider").style.display = "block";
+                document.getElementById("time slider").style.display = "block";
+                if (navigator.serial) {
+                    if (!serial.isOpen()) {
+                        await serial.connectAndOpen();
+                    } else {
+                        console.log("serial is already connected");
+                    }
+                } else {
+                    alert('Something has gone very wrong, please work harder');
+                }
+            }
+
+            async function turnOnLight(light) {
+                serial.writeLine(light + " 255 5000");
+            }
+
+            async function onSliderValueChanged(slideAmount) {
+                console.log("ok slidding");
+                return slideAmount;
+            }
+        </script>
+    </body>
+</html>
